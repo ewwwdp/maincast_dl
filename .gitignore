@@ -1,0 +1,22 @@
+## .NET build artifacts
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Visual Studio / Rider
+.vs/
+.idea/
+.vscode/
+
+## OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## Downloaded videos (maincast_dl output)
+*.mp4
+*.part.ts
