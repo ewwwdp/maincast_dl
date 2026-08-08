@@ -10,10 +10,11 @@ Download Maincast.tv VODs (via URL or slug) as MP4, with resumable downloads.
 ## Usage
 
 ```
-maincast_dl <maincast VOD URL or slug> [--seconds N] [--reencode] [--progress]
+maincast_dl <maincast VOD URL or slug>... [--seconds N] [--reencode] [--progress]
 ```
 
-The video is saved next to the executable, named after the VOD title.
+Pass one or more URLs/slugs to download them in sequence. Each video is saved
+next to the executable, named after the VOD title.
 
 | Option | Description |
 | --- | --- |
