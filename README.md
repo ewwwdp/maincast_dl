@@ -10,7 +10,7 @@ Download Maincast.tv VODs (via URL or slug) as MP4, with resumable downloads.
 ## Usage
 
 ```
-maincast_dl <maincast VOD URL or slug>... [--seconds N] [--reencode] [--progress]
+maincast_dl <maincast VOD URL or slug>... [--seconds N] [--reencode] [--progress] [--parallel N]
 ```
 
 Pass one or more URLs/slugs to download them in sequence. Each video is saved
@@ -21,11 +21,13 @@ next to the executable, named after the VOD title.
 | `--seconds N` | Download only the first N seconds |
 | `--reencode` | Re-encode to H.264/AAC instead of stream copy |
 | `--progress` | Show ffmpeg's verbose log |
+| `--parallel N` | Segment download concurrency (default 8) |
 
 ## Resuming
 
-Interrupt a download (Ctrl+C / SIGTERM) and the partial data is kept in a
-`.part.ts` file. Re-run the same command to resume from where it stopped.
+Interrupt a download (Ctrl+C / SIGTERM) and downloaded segments are kept in a
+`maincast-<slug>/` folder next to the output. Re-run the same command to resume
+from where it stopped; the folder is removed after a successful remux.
 
 ## Build & publish
 

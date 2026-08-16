@@ -1,7 +1,5 @@
 using System;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -10,7 +8,7 @@ namespace MaincastDl;
 
 internal static class Program
 {
-    private const string Usage = "usage: maincast_dl <maincast VOD URL or slug>... [--seconds N] [--reencode] [--progress]";
+    private const string Usage = "usage: maincast_dl <maincast VOD URL or slug>... [--seconds N] [--reencode] [--progress] [--parallel N]";
 
     private static async Task<int> Main(string[] args)
     {
@@ -58,67 +56,34 @@ internal static class Program
         await using var session = await SocketSession.ConnectAsync(host, mediaId);
         string hash = await session.GetHashAsync();
 
+        string master = $"https://{host}/{mediaId}/master.m3u8?key={hash}";
         string outfile = Path.Combine(AppContext.BaseDirectory,
             $"{Output.FormatDate(vod.Date)}.{Output.SafeName(vod.Name ?? slug)}.mp4");
-        string partFile = outfile + ".part.ts";
         Console.WriteLine("Output: " + outfile);
 
-        string master = $"https://{host}/{mediaId}/master.m3u8?key={hash}";
-        string headers = $"Referer: https://{host}/player?v={mediaId}\r\nOrigin: https://{host}\r\nAccept: */*\r\n";
+        Console.WriteLine("Downloading (parallel segments)...");
+        int rc = await HlsDownloader.DownloadAsync(
+            master, slug, outfile, opts, (sec, total) =>
+            {
+                Output.DrawProgress(sec, total);
+                return Task.CompletedTask;
+            });
 
-        double start = await FfmpegTools.ProbeDurationAsync(partFile) ?? 0;
-        if (start > 0)
-            Console.WriteLine($"Resuming from {Output.FormatTime(start)} (partial file)");
-
-        double? total = opts.Seconds ?? await FfmpegTools.ProbeDurationAsync(master, headers);
-        if (total is not null)
-            Console.WriteLine($"Duration: {Output.FormatTime(total.Value)}");
-
-        double? remaining = total is not null ? Math.Max(0, total.Value - start) : null;
-
-        int rc = 0;
-        if (remaining is not null && remaining.Value <= 0)
-        {
-            Console.WriteLine("Already fully downloaded, remuxing...");
-        }
-        else
-        {
-            ProcessStartInfo psi = FfmpegTools.BuildDownloadCommand(opts, master, headers, start, remaining);
-            Console.WriteLine($"ffmpeg: {string.Join(' ', psi.ArgumentList.Take(8))} ...");
-            rc = await FfmpegTools.RunDownloadAsync(psi, partFile, start > 0 && File.Exists(partFile), start, total);
-        }
-
-        return await Finish(rc, partFile, outfile);
-    }
-
-    private static async Task<int> Finish(int rc, string partFile, string outfile)
-    {
         if (ToolRunner.Cancelled)
-        {
-            Console.WriteLine($"\nInterrupted - partial saved. Re-run to resume from {partFile}");
             return 130;
-        }
         if (rc != 0)
         {
-            Console.WriteLine($"\nffmpeg failed (exit {rc}) - partial saved. Re-run to resume from {partFile}");
+            Console.WriteLine($"\nDownload failed (exit {rc}).");
             return rc;
         }
-        if (!File.Exists(partFile) || new FileInfo(partFile).Length == 0)
+        if (!File.Exists(outfile) || new FileInfo(outfile).Length == 0)
         {
             Console.WriteLine("\nNo data downloaded.");
             return 1;
         }
 
-        Console.WriteLine("Remuxing to MP4...");
-        int rr = await FfmpegTools.RemuxAsync(partFile, outfile);
-        if (rr == 0 && File.Exists(outfile))
-        {
-            File.Delete(partFile);
-            Console.WriteLine($"\nDone -> {outfile}");
-            return 0;
-        }
-        Console.WriteLine($"\nRemux failed (exit {rr}) - raw TS kept at {partFile}");
-        return rr;
+        Console.WriteLine($"\nDone -> {outfile}");
+        return 0;
     }
 
     private static string ResolveSlug(string arg)
