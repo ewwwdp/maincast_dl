@@ -189,7 +189,7 @@ internal static class HlsDownloader
         ToolRunner.AddArgs(psi, "-hide_banner", "-loglevel", "error", "-y",
             "-i", "concat:" + video, "-i", "concat:" + audio,
             "-c", "copy", "-bsf:a", "aac_adtstoasc",
-            "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+            "-movflags", "+faststart",
             "-fflags", "+genpts");
         if (reencode)
             ToolRunner.AddArgs(psi, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-c:a", "aac");
