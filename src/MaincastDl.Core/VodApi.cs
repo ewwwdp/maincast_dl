@@ -1,15 +1,12 @@
-using System;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
 
-namespace MaincastDl;
+namespace MaincastDl.Core;
 
-internal sealed record Vod(string Name, string Date, string Link);
+public sealed record Vod(string Name, string Date, string Link);
 internal sealed record Search(Vod[] Data);
 
-internal static class VodApi
+public static class VodApi
 {
     private const string DirectusApi = "https://a.maincast.tv/items/vod";
 
@@ -23,11 +20,9 @@ internal static class VodApi
 
     public static async Task<Vod> FetchAsync(string slug)
     {
-        Search? res = await Http.GetFromJsonAsync<Search>(
+        var res = await Http.GetFromJsonAsync<Search>(
             $"{DirectusApi}?filter%5Bslug%5D%5B_eq%5D={Uri.EscapeDataString(slug)}&fields=name,date,link,is_free");
-        if (res?.Data is not { Length: > 0 } data)
-            throw new Exception($"VOD not found for slug: {slug}");
-        return data[0];
+        return res?.Data is not { Length: > 0 } data ? throw new Exception($"VOD not found for slug: {slug}") : data[0];
     }
 
     public static async Task<string> ResolveHostAsync(string playerUrl)

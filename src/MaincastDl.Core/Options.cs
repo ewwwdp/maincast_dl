@@ -1,10 +1,8 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 
-namespace MaincastDl;
+namespace MaincastDl.Core;
 
-internal sealed record Options(double? Seconds, bool Reencode, bool Progress, int Parallel)
+public sealed record Options(double? Seconds, bool Reencode, bool Progress, int Parallel)
 {
     public static (Options Options, string[] Vods) Parse(string[] args)
     {

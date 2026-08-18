@@ -1,17 +1,13 @@
-using System;
 using System.Globalization;
-using System.IO;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
-namespace MaincastDl;
+namespace MaincastDl.Core;
 
-internal static class Output
+public static class Output
 {
     public static async Task DrainAsync(StreamReader reader)
     {
-        string? line;
-        while ((line = await reader.ReadLineAsync()) is not null)
+        while (await reader.ReadLineAsync() is { } line)
             Console.WriteLine(line);
     }
 
@@ -34,11 +30,11 @@ internal static class Output
         return t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"mm\:ss");
     }
 
-    public static void DrawProgress(double sec, double? total)
+    public static void DrawProgress(string phase, double sec, double? total)
     {
         int pct = total is > 0 ? (int)Math.Clamp(sec / total.Value * 100, 0, 100) : -1;
         Console.Write(pct >= 0
-            ? $"\rProgress: {pct,3}%  {FormatTime(sec)} / {FormatTime(total!.Value)}"
-            : $"\rDownloaded: {FormatTime(sec)}");
+            ? $"\r{phase}: {pct,3}%  {FormatTime(sec)} / {FormatTime(total!.Value)}"
+            : $"\r{phase}: {FormatTime(sec)}");
     }
 }

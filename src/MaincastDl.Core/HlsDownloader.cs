@@ -1,14 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
+using System.Globalization;
 using System.Security.Cryptography;
-using System.Threading.Tasks;
 
-namespace MaincastDl;
+namespace MaincastDl.Core;
 
-internal static class HlsDownloader
+public static class HlsDownloader
 {
     private static readonly HttpClient Http = new()
     {
@@ -19,7 +14,7 @@ internal static class HlsDownloader
     private sealed record Track(List<Segment> Segments, byte[] Key, byte[] Iv);
 
     public static async Task<int> DownloadAsync(string master, string slug,
-        string outfile, Options opts, Func<double, double?, Task> reportProgress)
+        string outfile, Options opts, Func<string, double, double?, Task> reportProgress)
     {
         string dir = Path.Combine(Path.GetDirectoryName(outfile) ?? AppContext.BaseDirectory, "maincast-" + slug);
         Directory.CreateDirectory(dir);
@@ -56,14 +51,15 @@ internal static class HlsDownloader
                 }));
 
                 double done = video.Segments.Take(Math.Min(i + batch, count)).Sum(s => s.Duration);
-                await reportProgress(done, totalSec);
+                await reportProgress("Downloading", done, totalSec);
             }
 
-            int rc = await MuxAsync(dir, count, outfile, opts.Reencode);
-            if (rc == 0)
-            {
-                try { Directory.Delete(dir, true); } catch { }
-            }
+            int rc = await MuxAsync(dir, count, outfile, opts.Reencode, totalSec,
+                (sec, total) => reportProgress("Muxing", sec, total));
+            if (rc != 0)
+                return rc;
+            try { Directory.Delete(dir, true); }
+            catch { }
             return rc;
         }
         finally
@@ -129,7 +125,8 @@ internal static class HlsDownloader
             }
             else if (line.StartsWith("#EXTINF", StringComparison.Ordinal))
             {
-                duration = double.TryParse(line.Split(':')[1].Split(',')[0], out double d)
+                duration = double.TryParse(line.Split(':')[1].Split(',')[0],
+                        NumberStyles.Float, CultureInfo.InvariantCulture, out double d)
                     ? d : 0;
             }
             else if (line.Length > 0 && !line.StartsWith('#'))
@@ -173,20 +170,20 @@ internal static class HlsDownloader
         aes.IV = iv;
         aes.Mode = CipherMode.CBC;
         aes.Padding = PaddingMode.None;
-        using var dec = aes.CreateDecryptor();
+        using ICryptoTransform dec = aes.CreateDecryptor();
         return dec.TransformFinalBlock(data, 0, data.Length);
     }
 
-    private static async Task<int> MuxAsync(string dir, int count, string outfile, bool reencode)
+    private static async Task<int> MuxAsync(string dir, int count, string outfile, bool reencode,
+        double totalSec, Func<double, double?, Task> report)
     {
-        // The concat protocol (concat:file|file) preserves source timestamps,
-        // keeping audio in sync. But one giant arg can exceed the OS per-argument
-        // limit for long downloads, so build chunks first, then concat the chunks.
-        string video = await ConcatChunksAsync(dir, 'v', count);
-        string audio = await ConcatChunksAsync(dir, 'a', count);
+        int chunkSize = ChunkSizeFor(dir);
+        string video = await ConcatChunksAsync(dir, 'v', count, chunkSize, report, totalSec, 0, 2);
+        string audio = await ConcatChunksAsync(dir, 'a', count, chunkSize, report, totalSec, 1, 2);
 
         var psi = ToolRunner.NewProcess("ffmpeg");
-        ToolRunner.AddArgs(psi, "-hide_banner", "-loglevel", "error", "-y",
+        ToolRunner.AddArgs(psi, "-hide_banner", "-loglevel", "error", "-nostats", "-y",
+            "-progress", "pipe:2",
             "-i", "concat:" + video, "-i", "concat:" + audio,
             "-c", "copy", "-bsf:a", "aac_adtstoasc",
             "-movflags", "+faststart",
@@ -197,12 +194,19 @@ internal static class HlsDownloader
 
         return await ToolRunner.RunAsync(psi, proc => Task.WhenAll(
             Output.DrainAsync(proc.StandardOutput),
-            Output.DrainAsync(proc.StandardError)));
+            ReadMuxProgress(proc.StandardError, totalSec, report)));
     }
 
-    private static async Task<string> ConcatChunksAsync(string dir, char tag, int count)
+    private static int ChunkSizeFor(string dir)
     {
-        const int chunkSize = 500;
+        string sample = Path.Combine(dir, "v0000.ts");
+        return Math.Clamp(30000 / (sample.Length + 1), 50, 500);
+    }
+
+    private static async Task<string> ConcatChunksAsync(string dir, char tag, int count, int chunkSize,
+        Func<double, double?, Task> report, double totalSec, int runIndex, int totalRuns)
+    {
+        int chunkCount = (count + chunkSize - 1) / chunkSize;
         var chunks = new List<string>();
         for (int start = 0; start < count; start += chunkSize)
         {
@@ -219,8 +223,45 @@ internal static class HlsDownloader
             if (rc != 0)
                 throw new Exception($"Failed to concat chunk {start}");
             chunks.Add(chunkFile);
+
+            int done = start / chunkSize + 1;
+            double frac = (double)(runIndex * chunkCount + done) / (totalRuns * chunkCount);
+            await report(0.5 * frac * totalSec, totalSec);
         }
         return string.Join('|', chunks);
+    }
+
+    private static async Task ReadMuxProgress(StreamReader reader, double totalSec,
+        Func<double, double?, Task> report)
+    {
+        string? line;
+        while ((line = await reader.ReadLineAsync()) is not null)
+        {
+            if (line.StartsWith("out_time_us=", StringComparison.Ordinal) ||
+                line.StartsWith("out_time_ms=", StringComparison.Ordinal))
+            {
+                if (long.TryParse(line[(line.IndexOf('=') + 1)..], out long us))
+                {
+                    double frac = Math.Clamp(us / 1e6 / Math.Max(totalSec, 1), 0, 1);
+                    await report(0.5 * totalSec + 0.5 * frac * totalSec, totalSec);
+                }
+            }
+            else if (line.Length > 0 && !LooksLikeProgress(line))
+            {
+                Console.WriteLine(line);
+            }
+        }
+    }
+
+    private static bool LooksLikeProgress(string line)
+    {
+        int eq = line.IndexOf('=');
+        if (eq <= 0)
+            return false;
+        for (int i = 0; i < eq; i++)
+            if (!char.IsLetterOrDigit(line[i]) && line[i] != '_')
+                return false;
+        return true;
     }
 
     private static int SegmentsFor(List<Segment> segments, double seconds)

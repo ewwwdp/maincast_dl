@@ -1,0 +1,53 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="600"
+        x:Class="MaincastDl.Desktop.MainWindow"
+        Title="Maincast Downloader"
+        Width="760" Height="600"
+        MinWidth="600" MinHeight="460">
+    <Grid Margin="14" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10">
+
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+            <TextBlock Text="VOD link:" VerticalAlignment="Center"/>
+            <TextBox x:Name="VodInput" Grid.Column="1"
+                     PlaceholderText="Paste a maincast.tv VOD link or slug here"
+                     TextChanged="OnVodTextChanged" KeyDown="OnVodKeyDown"/>
+            <Button x:Name="PasteButton" Grid.Column="2" Content="Paste" Click="OnPaste"/>
+            <Button x:Name="FetchButton" Grid.Column="3" Content="Fetch info" Click="OnFetch"/>
+            <Button x:Name="DownloadButton" Grid.Column="4" Content="Download" Click="OnDownload"/>
+        </Grid>
+
+        <StackPanel Grid.Row="1" Spacing="3">
+            <TextBlock x:Name="InfoTitle" Text="No VOD loaded" FontWeight="SemiBold"/>
+            <TextBlock x:Name="InfoMeta" Text="" TextWrapping="Wrap"/>
+            <TextBlock x:Name="InfoOutput" Text="" TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <WrapPanel Grid.Row="2" ItemSpacing="18" VerticalAlignment="Center">
+            <CheckBox x:Name="ReencodeCheck" Content="Re-encode (H.264/AAC)"/>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="Parallel:" VerticalAlignment="Center"/>
+                <NumericUpDown x:Name="ParallelSpin" Value="8" Minimum="1" Maximum="32"
+                               Increment="1" Width="110"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="Max seconds (0 = full):" VerticalAlignment="Center"/>
+                <NumericUpDown x:Name="SecondsSpin" Value="0" Minimum="0" Maximum="86400"
+                               Increment="60" Width="130"/>
+            </StackPanel>
+        </WrapPanel>
+
+        <TextBox x:Name="LogBox" Grid.Row="3" IsReadOnly="True" AcceptsReturn="True"
+                 TextWrapping="Wrap" FontFamily="Consolas, Menlo, monospace"/>
+
+        <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="12">
+            <ProgressBar x:Name="Progress" Minimum="0" Maximum="100" Height="20"/>
+            <TextBlock x:Name="ProgressText" Grid.Column="1" VerticalAlignment="Center" Text="0%"/>
+            <TextBlock x:Name="ProgressTime" Grid.Column="2" VerticalAlignment="Center" Text="00:00 / 00:00"/>
+            <Button x:Name="CancelButton" Grid.Column="3" Content="Cancel" Click="OnCancel"
+                    IsEnabled="False"/>
+        </Grid>
+    </Grid>
+</Window>

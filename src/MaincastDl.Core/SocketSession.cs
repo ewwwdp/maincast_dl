@@ -1,13 +1,10 @@
-using System;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace MaincastDl;
+namespace MaincastDl.Core;
 
-internal sealed class SocketSession : IAsyncDisposable
+public sealed class SocketSession : IAsyncDisposable
 {
     private const string Origin = "https://vod-maincast.cosmonova-broadcast.tv";
 
@@ -46,8 +43,9 @@ internal sealed class SocketSession : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _cts.Cancel();
-        try { await _heartbeat; } catch { }
+        await _cts.CancelAsync();
+        try { await _heartbeat; }
+        catch { }
         await _ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
         _ws.Dispose();
     }

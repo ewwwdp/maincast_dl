@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/MaincastDl.Core/MaincastDl.Core.csproj" />
+  <Project Path="src/MaincastDl.Desktop/MaincastDl.Desktop.csproj" />
+  <Project Path="src/MaincastDl/MaincastDl.csproj" />
+</Solution>

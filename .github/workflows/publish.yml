@@ -8,18 +8,8 @@ on:
 
 jobs:
   build:
-    name: Build ${{ matrix.rid }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            rid: linux-x64
-          - os: windows-latest
-            rid: win-x64
-          - os: macos-latest
-            rid: osx-arm64
-    runs-on: ${{ matrix.os }}
+    name: Publish all platforms
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
@@ -27,21 +17,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Publish single-file
-        shell: bash
-        run: |
-          dotnet publish -c Release -r ${{ matrix.rid }} -o out
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            mv out/maincast_dl.exe out/maincast_dl-${{ matrix.rid }}.exe
-          else
-            mv out/maincast_dl out/maincast_dl-${{ matrix.rid }}
-          fi
+      - name: Publish console + GUI for all platforms
+        run: ./scripts/publish-all.sh
 
-      - name: Upload artifact
+      - name: Upload zips
         uses: actions/upload-artifact@v7
         with:
-          name: maincast_dl-${{ matrix.rid }}
-          path: out/*
+          name: zips
+          path: publish/*.zip
 
   release:
     name: Create release

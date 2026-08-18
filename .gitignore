@@ -17,6 +17,9 @@ publish/
 Thumbs.db
 desktop.ini
 
-## Downloaded videos (maincast_dl output)
+## Downloaded videos (MaincastDl output)
 *.mp4
 *.part.ts
+
+## Bundled ffmpeg binaries (fetch with scripts/fetch-ffmpeg.sh)
+src/MaincastDl.Desktop/ffmpeg/

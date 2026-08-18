@@ -4,9 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>maincast_dl</AssemblyName>
+    <AssemblyName>MaincastDl</AssemblyName>
     <RootNamespace>MaincastDl</RootNamespace>
-    <Version>1.0.4</Version>
+    <Version>1.1.0</Version>
     <Authors>ewwwdp</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
@@ -16,4 +16,8 @@
     <DebugSymbols>false</DebugSymbols>
     <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MaincastDl.Core\MaincastDl.Core.csproj" />
+  </ItemGroup>
 </Project>

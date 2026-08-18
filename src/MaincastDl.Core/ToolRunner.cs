@@ -1,17 +1,18 @@
-using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 
-namespace MaincastDl;
+namespace MaincastDl.Core;
 
-internal static class ToolRunner
+public static class ToolRunner
 {
     private static volatile bool _cancelled;
     private static Process? _current;
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
 
-    public static bool Cancelled => _cancelled;
+    public static bool Cancelled
+    {
+        get => _cancelled;
+    }
 
     public static void RegisterCancelHandlers()
     {
@@ -20,9 +21,10 @@ internal static class ToolRunner
         catch { }
     }
 
-    public static ProcessStartInfo NewProcess(string tool) => new(tool)
+    public static ProcessStartInfo NewProcess(string tool) => new(ResolveTool(tool))
     {
         UseShellExecute = false,
+        CreateNoWindow = true,
         RedirectStandardOutput = true,
         RedirectStandardError = true,
     };
@@ -49,12 +51,25 @@ internal static class ToolRunner
         }
     }
 
-    private static void Cancel()
+    public static void Cancel()
     {
         _cancelled = true;
         lock (Gate)
         {
-            try { _current?.Kill(true); } catch { }
+            try { _current?.Kill(true); }
+            catch { }
         }
+    }
+
+    private static string ResolveTool(string tool)
+    {
+        string exe = tool + (OperatingSystem.IsWindows() ? ".exe" : "");
+        string[] candidates =
+        [
+            Path.Combine(AppContext.BaseDirectory, "ffmpeg", exe),
+            Path.Combine(AppContext.BaseDirectory, exe),
+            tool
+        ];
+        return candidates.FirstOrDefault(File.Exists) ?? tool;
     }
 }
