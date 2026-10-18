@@ -17,11 +17,12 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _debounce;
     private string? _lastFetched;
 
-    private sealed record DownloadInput(string Arg, double? Seconds, bool Reencode, int Parallel);
+    private sealed record DownloadInput(string Arg, double? Seconds, bool Reencode, int Parallel, string? Cookie);
 
     public MainWindow()
     {
         InitializeComponent();
+        CookieInput.Text = Environment.GetEnvironmentVariable("MAINCAST_COOKIE") ?? "";
         Log("Ready. Paste a Maincast VOD link and press Enter (or Download).");
         Log("ffmpeg: " + ToolRunner.NewProcess("ffmpeg").FileName);
     }
@@ -109,7 +110,8 @@ public partial class MainWindow : Window
             arg,
             SecondsSpin.Value is { } s and > 0 ? (double)s : null,
             ReencodeCheck.IsChecked == true,
-            ParallelSpin.Value is { } p and > 0 ? (int)p : 8);
+            ParallelSpin.Value is { } p and > 0 ? (int)p : 8,
+            CookieInput.Text?.Trim() is { Length: > 0 } c ? c : null);
 
         ResetProgress();
         SetBusy(true);
@@ -133,8 +135,8 @@ public partial class MainWindow : Window
     private async Task FetchAsync(DownloadInput input)
     {
         string slug = MaincastId.ResolveSlug(input.Arg);
-        Vod vod = await VodApi.FetchAsync(slug);
-        string host = await VodApi.ResolveHostAsync(vod.Link);
+        VodInfo vod = await VodApi.ResolveAsync(slug, input.Cookie);
+        string host = vod.Host.Length > 0 ? vod.Host : "(login required for stream)";
         await UiAsync(() =>
         {
             InfoTitle.Text = "Title: " + vod.Name;
@@ -146,24 +148,25 @@ public partial class MainWindow : Window
     private async Task DownloadAsync(DownloadInput input)
     {
         string slug = MaincastId.ResolveSlug(input.Arg);
-        Vod vod = await VodApi.FetchAsync(slug);
-        string mediaId = MaincastId.ExtractMediaId(vod.Link);
-        string host = await VodApi.ResolveHostAsync(vod.Link);
+        VodInfo vod = await VodApi.ResolveAsync(slug, input.Cookie);
 
         await UiAsync(() =>
         {
             InfoTitle.Text = "Title: " + vod.Name;
-            InfoMeta.Text = $"Date: {vod.Date}  ·  Host: {host}";
-            Log($"Downloading {vod.Name} ({vod.Date}) from {host}");
+            InfoMeta.Text = $"Date: {vod.Date}  ·  Host: {vod.Host}";
+            Log($"Downloading {vod.Name} ({vod.Date}) from {vod.Host}");
         });
 
-        await using SocketSession session = await SocketSession.ConnectAsync(host, mediaId);
+        if (vod.MediaId is not { Length: > 0 })
+            throw new Exception("This VOD requires a Maincast login - enter your session cookie above or set MAINCAST_COOKIE.");
+
+        await using SocketSession session = await SocketSession.ConnectAsync(vod.Host, vod.MediaId);
         string hash = await session.GetHashAsync();
-        string master = $"https://{host}/{mediaId}/master.m3u8?key={hash}";
+        string master = $"https://{vod.Host}/{vod.MediaId}/master.m3u8?key={hash}";
 
         string outfile = Path.Combine(
             AppContext.BaseDirectory,
-            $"{Output.FormatDate(vod.Date)}.{Output.SafeName(vod.Name ?? slug)}.mp4");
+            $"{Output.FormatDate(vod.Date)}.{Output.SafeName(vod.Name)}.mp4");
 
         await UiAsync(() =>
         {
@@ -171,7 +174,7 @@ public partial class MainWindow : Window
             Log("Output: " + outfile);
         });
 
-        var opts = new Options(input.Seconds, input.Reencode, false, input.Parallel);
+        var opts = new Options(input.Seconds, input.Reencode, false, input.Parallel, input.Cookie);
 
         int rc = await HlsDownloader.DownloadAsync(master, slug, outfile, opts,
             (phase, sec, total) =>

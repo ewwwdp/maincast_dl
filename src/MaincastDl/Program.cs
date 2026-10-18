@@ -8,7 +8,7 @@ namespace MaincastDl;
 
 internal static class Program
 {
-    private const string Usage = "usage: MaincastDl <maincast VOD URL or slug>... [--seconds N] [--reencode] [--progress] [--parallel N]";
+    private const string Usage = "usage: MaincastDl <maincast VOD URL or slug>... [--seconds N] [--reencode] [--progress] [--parallel N] [--cookie <session>]";
 
     private static async Task<int> Main(string[] args)
     {
@@ -45,21 +45,22 @@ internal static class Program
 
     private static async Task<int> DownloadVodAsync(Options opts, string arg)
     {
-        string slug = ResolveSlug(arg);
-        Vod vod = await VodApi.FetchAsync(slug);
-        string mediaId = ExtractMediaId(vod.Link);
+        string slug = MaincastId.ResolveSlug(arg);
+        VodInfo vod = await VodApi.ResolveAsync(slug, opts.Cookie);
 
         Console.WriteLine($"Title: {vod.Name}");
         Console.WriteLine($"Date:  {vod.Date}");
-        string host = await VodApi.ResolveHostAsync(vod.Link);
-        Console.WriteLine($"Streaming host: {host}");
+        Console.WriteLine($"Streaming host: {vod.Host}");
 
-        await using SocketSession session = await SocketSession.ConnectAsync(host, mediaId);
+        if (vod.MediaId is not { Length: > 0 })
+            throw new Exception("This VOD requires a Maincast login - pass your session cookie with --cookie or MAINCAST_COOKIE.");
+
+        await using SocketSession session = await SocketSession.ConnectAsync(vod.Host, vod.MediaId);
         string hash = await session.GetHashAsync();
 
-        string master = $"https://{host}/{mediaId}/master.m3u8?key={hash}";
+        string master = $"https://{vod.Host}/{vod.MediaId}/master.m3u8?key={hash}";
         string outfile = Path.Combine(AppContext.BaseDirectory,
-            $"{Output.FormatDate(vod.Date)}.{Output.SafeName(vod.Name ?? slug)}.mp4");
+            $"{Output.FormatDate(vod.Date)}.{Output.SafeName(vod.Name)}.mp4");
         Console.WriteLine("Output: " + outfile);
 
         Console.WriteLine("Downloading (parallel segments)...");
@@ -86,8 +87,4 @@ internal static class Program
         Console.WriteLine($"\nDone -> {outfile}");
         return 0;
     }
-
-    private static string ResolveSlug(string arg) => MaincastId.ResolveSlug(arg);
-
-    private static string ExtractMediaId(string link) => MaincastId.ExtractMediaId(link);
 }

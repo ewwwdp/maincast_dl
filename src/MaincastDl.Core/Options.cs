@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace MaincastDl.Core;
 
-public sealed record Options(double? Seconds, bool Reencode, bool Progress, int Parallel)
+public sealed record Options(double? Seconds, bool Reencode, bool Progress, int Parallel, string? Cookie)
 {
     public static (Options Options, string[] Vods) Parse(string[] args)
     {
@@ -10,6 +10,7 @@ public sealed record Options(double? Seconds, bool Reencode, bool Progress, int 
         bool reencode = false;
         bool progress = false;
         int parallel = 8;
+        string? cookie = Environment.GetEnvironmentVariable("MAINCAST_COOKIE");
         var vods = new List<string>();
 
         for (int i = 0; i < args.Length; i++)
@@ -32,12 +33,17 @@ public sealed record Options(double? Seconds, bool Reencode, bool Progress, int 
                     break;
                 case "--parallel":
                     break;
+                case "--cookie" when i + 1 < args.Length:
+                    cookie = args[++i];
+                    break;
+                case "--cookie":
+                    break;
                 default:
                     vods.Add(args[i]);
                     break;
             }
         }
 
-        return (new Options(seconds, reencode, progress, parallel), vods.ToArray());
+        return (new Options(seconds, reencode, progress, parallel, cookie), vods.ToArray());
     }
 }
