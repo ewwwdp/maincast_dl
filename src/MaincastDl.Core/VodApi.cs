@@ -49,9 +49,17 @@ public static class VodApi
 
     public static async Task<Vod?> TryFetchLegacyAsync(string slug)
     {
-        Search? res = await Http.GetFromJsonAsync<Search>(
-            $"{LegacyApi}?filter%5Bslug%5D%5B_eq%5D={Uri.EscapeDataString(slug)}&fields=name,date,link,is_free");
-        return res?.Data is { Length: > 0 } data ? data[0] : null;
+        try
+        {
+            Search? res = await Http.GetFromJsonAsync<Search>(
+                $"{LegacyApi}?filter%5Bslug%5D%5B_eq%5D={Uri.EscapeDataString(slug)}&fields=name,date,link,is_free");
+            return res?.Data is { Length: > 0 } data ? data[0] : null;
+        }
+        catch
+        {
+            // legacy catalog can be unavailable; fall through to the new API
+            return null;
+        }
     }
 
     public static async Task<string> ResolveHostAsync(string playerUrl)
